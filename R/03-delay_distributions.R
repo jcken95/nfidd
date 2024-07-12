@@ -11,6 +11,7 @@ library("lubridate")
 library("here")
 library("cmdstanr")
 library("posterior")
+library("patchwork") # used in exercises - not required by the course
 
 set.seed(123)
 options(cmdstanr_print_line_numbers = TRUE)
@@ -92,6 +93,8 @@ ggplot(dfl, aes(x = time)) +
 
 # estimation of delay distribution from data ----
 
+## lognormal model ----
+
 # aim: recover model parameters (time to hospitalisation)
 
 mod <- cmdstan_model(here("nfidd", "stan", "lognormal.stan"))
@@ -140,11 +143,110 @@ res_df <- res_df |>
   mutate(density = dlnorm(x, meanlog, sdlog))
 
 ## plot
-ggplot(res_df, aes(x = x, y = density, group = .draw)) +
-  geom_line(alpha = 0.3)
+lognormal_density <- ggplot(res_df, aes(x = x, y = density, group = .draw)) +
+  geom_line(alpha = 0.3) +
+  ggtitle("lognormal")
 
 # Exercise:
 #  In this session we were in the enviable situation of knowing which
 # distribution was used to generate the data. With real data, of course,
 # we don’t have this information available. Try using a different distribution
 # for inference (e.g. normal, or gamma). Do you get a good fit?
+
+##  gamma model ----
+
+gamma_mod <- cmdstan_model(here("stan", "03-gamma.stan"))
+gamma_mod
+
+
+df_onset_to_hosp_gamma <- df |>
+  mutate(onset_to_hosp = hosp_time - onset_time) |>
+  # exclude infections that didn't result in hospitalisation
+  drop_na(onset_to_hosp)
+## Use the data to sample from the model posterior
+res_gamma <- gamma_mod$sample(
+  data = list(
+    n = nrow(df_onset_to_hosp),
+    y = df_onset_to_hosp$onset_to_hosp
+  )
+)
+
+res_gamma$summary()
+
+# posterior means of these params close to theoretical values
+# E(mu, sig | data) = (1.73, 0.494)
+
+## get shape and rate samples from the posterior
+res_df_gamma <- res_gamma |>
+  as_draws_df() |>
+  filter(.draw %in% sample(.draw, 100)) # sample 100 draws
+
+## find the value (x) that includes 99% of the cumulative density
+#max_x_gamma <- max(qgamma(0.99999, shape = res_df_gamma$alpha, scale = res_df_gamma$beta))
+
+## calculate density on grid of x values
+x <- seq(0, max_x, length.out = 100)
+res_df_gamma <- res_df_gamma |>
+  crossing(x = x) |> ## add grid to data frame
+  mutate(density = dgamma(x, alpha, beta))
+
+## plot
+gamma_density <- ggplot(res_df_gamma, aes(x = x, y = density, group = .draw)) +
+  geom_line(alpha = 0.3) +
+  ggtitle("gamma")
+# not too different from the log normal
+# note if priors are (for gamma model) N(0, 10), as with lognormal
+# results are very different
+
+
+## normal model ----
+
+normal_mod <- cmdstan_model(here("stan", "03-normal.stan"))
+normal_mod
+
+
+df_onset_to_hosp_normal <- df |>
+  mutate(onset_to_hosp = hosp_time - onset_time) |>
+  # exclude infections that didn't result in hospitalisation
+  drop_na(onset_to_hosp)
+## Use the data to sample from the model posterior
+res_normal <- normal_mod$sample(
+  data = list(
+    n = nrow(df_onset_to_hosp),
+    y = df_onset_to_hosp$onset_to_hosp
+  )
+)
+
+res_normal$summary()
+
+# posterior means of these params close to theoretical values
+# E(mu, sig | data) = (1.73, 0.494)
+
+## get shape and rate samples from the posterior
+res_df_normal <- res_normal |>
+  as_draws_df() |>
+  filter(.draw %in% sample(.draw, 100)) # sample 100 draws
+
+## find the value (x) that includes 99% of the cumulative density
+#max_x_normal <- max(qnormal(0.99999, shape = res_df_normal$alpha, scale = res_df_normal$beta))
+
+## calculate density on grid of x values
+x <- seq(0, max_x, length.out = 100)
+res_df_normal <- res_df_normal |>
+  crossing(x = x) |> ## add grid to data frame
+  mutate(density = dnorm(x, mu, sigma))
+
+## plot
+normal_density <- ggplot(res_df_normal, aes(x = x, y = density, group = .draw)) +
+  geom_line(alpha = 0.3) +
+  ggtitle("normal")
+# not too different from the log normal
+# note if priors are (for normal model) N(0, 10), as with lognormal
+# results are very different
+
+wrap_plots(lognormal_density, gamma_density, normal_density)
+
+# gamma and lognormal are reasonably simlar - hard to tell apart by eye
+# normal isn't as good
+#  * non negligible density below zero
+#  * normal symmetric whereas truth (and gamma) are skewed
