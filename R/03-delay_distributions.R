@@ -3,18 +3,8 @@
 
 # setup ----
 
-library("nfidd")
-library("ggplot2")
-library("dplyr")
-library("tidyr")
-library("lubridate")
-library("here")
-library("cmdstanr")
-library("posterior")
-library("patchwork") # used in exercises - not required by the course
+source(here::here("R", "00-setup.R"))
 
-set.seed(123)
-options(cmdstanr_print_line_numbers = TRUE)
 
 # load data ----
 data(infection_times)
