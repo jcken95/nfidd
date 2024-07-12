@@ -1,0 +1,3 @@
+[submodule "nfidd"]
+	path = nfidd
+	url = https://github.com/nfidd/nfidd
