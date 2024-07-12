@@ -89,11 +89,39 @@ posterior_samples |>
   geom_vline(aes(xintercept = value_true)) +
   facet_wrap(~param, scales = "free")
 
-# perhaps some bias, but the true values are within the (margina) regions of high posterior density
+# perhaps some bias, but the true values are within the (marginal) regions of high posterior density
 
-res$draws() |>
+naive_scatter <- res$draws() |>
   tidybayes::tidy_draws() |>
   ggplot(aes(x  = meanlog, y = sdlog)) +
   geom_point() +
   geom_density_2d() +
   geom_point(data = true_params_wide, colour = "red", pch = 15)
+
+# estimation with double interval censoring ----
+
+cmod <- cmdstan_model(here("nfidd", "stan", "censored-delay-model.stan"))
+cmod
+# same log normal model as before, but now the onset times are
+# true_time = integer time of hospital admission + hospital time of day - onset time of day
+
+cres <- cmod$sample(
+  data = list(
+    n = nrow(na.omit(df_dates)),
+    onset_to_hosp = na.omit(df_dates)$onset_to_hosp
+  )
+)
+
+cres$summary()
+
+uniform_scatter <- cres$draws() |>
+  tidybayes::tidy_draws() |>
+  ggplot(aes(x  = meanlog, y = sdlog)) +
+  geom_point() +
+  geom_density_2d() +
+  geom_point(data = true_params_wide, colour = "red", pch = 15)
+
+patchwork::wrap_plots(
+  naive_scatter + ggtitle("naive"),
+  uniform_scatter + ggtitle("uniform")
+)
