@@ -10,5 +10,9 @@ library("lubridate")
 library("here")
 library("cmdstanr")
 
+# useful for my excersise solns
+library("patchwork")
+library("tidybayes")
+
 set.seed(123)
 options(cmdstanr_print_line_numbers = TRUE)
