@@ -243,3 +243,67 @@ tres
 
 # Ex 4: Try re-simulating the delays using different parameters of the delay distribution.
 # Can you establish under which conditions the bias in estimation gets worse?
+
+params <- expand_grid(
+  meanlog = seq(2, 4,  by = 0.5),
+  sdlog = seq(0.3, 0.7, by = 0.1)
+)
+
+simulation <- params |>
+  mutate(
+    aux_posterior = map2(
+      params$meanlog,
+      params$sdlog,
+
+      \(m, s) {
+        withr::with_seed(4321, fit_trunc_model(tmod, true_params = tibble(meanlog = m, sdlog = s)))
+      }
+    ),
+    plot = map(aux_posterior, \(.x) .x$plot),
+    posterior = map(aux_posterior, \(.x) .x$posterior),
+    input_data = map(aux_posterior, \(.x) .x$input_data)
+  ) |>
+  select(-aux_posterior) |>
+  mutate(
+    e_meanlog = map(posterior, \(post) mean_from_summary(post, "meanlog")),
+    e_sdlog  = map(posterior, \(post)  mean_from_summary(post, "sdlog"))
+  ) |>
+  unnest(c(e_meanlog, e_sdlog))
+
+simulation <- simulation |>
+  mutate(
+    mean = exp(meanlog + 0.5 * sdlog^2),
+    variance = (exp(sdlog^2) - 1) * exp(sdlog^2 + 2 * meanlog)
+  )
+
+simulation <- simulation |>
+  rowwise() |>
+  mutate(overall_bias = overall_error(c(e_meanlog, e_sdlog), c(meanlog, sdlog))) |>
+  ungroup()
+
+simulation |>
+  ggplot(aes(x = meanlog, y = sdlog, fill = overall_bias)) +
+  geom_tile()
+
+simulation |>
+  ggplot(aes(x = meanlog, y = overall_bias, colour = sdlog)) +
+  geom_point()
+
+# reduced relative error as meanlog increases
+
+simulation |>
+  ggplot(aes(x = sdlog, y = overall_bias, colour = meanlog)) +
+  geom_point()
+
+# reduced relative error as sd log increases (maybe?)
+
+simulation |>
+  ggplot(aes(x = mean, y = overall_bias, colour = variance)) +
+  geom_point()
+
+# larger mean -> reduced relative error
+
+simulation |>
+  ggplot(aes(x = variance, y = overall_bias, colour = mean)) +
+  geom_point()
+
