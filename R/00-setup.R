@@ -114,3 +114,9 @@ overall_error <- function(observed, expected) {
 
   sum(top / expected)
 }
+
+mean_from_summary <- function(obj, var) {
+  obj$summary() |>
+    dplyr::filter(variable == var) |>
+    dplyr::pull(mean)
+}

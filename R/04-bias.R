@@ -195,3 +195,51 @@ simulation |>
   geom_point()
 
 # larger var -> reduced relative error (just about ...)
+
+
+# Real time estimation: trucation ----
+
+df_realtime <- df |>
+  mutate(onset_to_hosp = hosp_time - onset_time) |>
+  filter(hosp_time <= 70)
+
+# truncated mean delay
+mean(df_realtime$onset_to_hosp)
+mean(df$hosp_time - df$onset_time, na.rm = TRUE)
+# true mean (second one) slightly larger
+
+# Ex 3: Fit the lognormal model used above to the estimates from the truncated data,
+# i.e. using the df_realtime data set. How far away from the “true” parameters do you end up?
+
+res <- mod$sample(
+  data = list(
+    n = nrow(na.omit(df_realtime)),
+    y = na.omit(df_realtime)$onset_to_hosp
+  )
+)
+
+res
+
+# fit a model which accounts for truncation
+
+tmod <- cmdstan_model(here("nfidd", "stan", "truncated-delay-model.stan"))
+# the onset to hospital now follows a truncated distribution
+# onset_to_hosp[i] ~ lognormal(meanlog, sdlog) T[0, time_since_onset[i]]
+tmod
+
+# fit new model
+tres <- tmod$sample(
+  data = list(
+    n = nrow(df_realtime),
+    onset_to_hosp = df_realtime$onset_to_hosp,
+    # 70 is the "current" time
+    time_since_onset = 70 - df_realtime$onset_time
+  )
+)
+
+tres
+
+# posterior mean v close to true params!
+
+# Ex 4: Try re-simulating the delays using different parameters of the delay distribution.
+# Can you establish under which conditions the bias in estimation gets worse?
